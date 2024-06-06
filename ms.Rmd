@@ -1,0 +1,254 @@
+---
+title: "Progetto Modelli Statistici"
+author: "Abdula Kalus"
+date: "a.a. 2023/2024"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ellipse)
+library(MASS)
+library(knitr)
+library(kableExtra)
+options(knitr.kable.NA = '')
+setwd("C:\\Users\\abdul\\Desktop\\Modelli_statistici")
+```
+
+## Analisi dei dati sulle mancie
+
+Il dataset in __tips.csv__ contiene infromazioni registrate da un cameriere sulle mancie ricevute in un periodo di qualche mese.
+Obiettivo dell’analisi è investigare la relazione tra il valore della mancia e le caratteristiche presenti nel dataset. 
+Carichiamo i dati e guardiamo le prime righe della matrice dei dati
+
+```{r, include=FALSE}
+df = read.csv("tips.csv", stringsAsFactors = TRUE)
+knitr::kable(head(df), caption = "Table")
+```
+
+Il dataset è composto da 7 variabili e 244 osservazioni.
+
+La variabile __y__ è __tip__, e avrà il ruolo di variabile risposta. 
+
+- __tip__: mancia
+
+Riportiamo sotto il significato delle variabili esplicative
+
+1. __total_bill__: conto totale
+2. __sex__: sesso del cliente ( _Male_ o _Female_ )
+3. __smoker__: cliente fumaotre ( _si_ o _no_)
+4. __day__: giorno della settimana
+5. __time__: orario del servizio ( _Lunch_ o _Dinner_)
+6. __size__: numero di persone
+
+```{r results = 'asis', include=FALSE}
+kbl(summary(df), caption = "Summary") %>% kable_paper("hover", full_width = F)
+```
+Possiamo vedere dalla tabella riassuntiva ottenuta con il comando _summary_ alcune sintesi statistiche sul dataset, sono presenti tre variabili continue ( _total_bill_, _tip_, _size_ ) e quattro varibile categoriali ( _sex_, _smoker_, _day_, _time_).
+Inoltre possiamo osservare che non è segnalata la presenza di valori NA.
+
+### Variabili quantitative
+
+```{r, include=TRUE, echo=FALSE}
+df_cont <- dplyr::select(df, c(tip, total_bill, size))
+cor_matrix <- cor(df_cont)
+
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione\n conto toale - mancia",
+     xlab="Conto totale", ylab="Mancia", pch=16, col="#0072B2")
+
+plot(x=df$size, y=log1p(df$tip), main="Diagramma di dispersione\n size - mancia",
+     xlab="Size", ylab="Mancia", pch=16, col="#0072B2")
+
+boxplot(df$total_bill~as.factor(df$size))
+tst <- lm(tip~ total_bill+as.factor(size), data=df)
+summary(tst)
+anova(tst)
+```
+```{r, include=TRUE, echo=FALSE}
+kbl(cor_matrix, caption = "Matrice di correlazione") %>% kable_paper("hover", full_width = F)
+plotcorr(cor_matrix)
+```
+
+Dallo scatterplot possiamo vedere che è presente una buona correlazione tra la variabile risposta __tip__ e la variabile esplicativa __total_bill__, e vale lo stesso per la variabile __size__ è presente una correlazione abbastanza siginificativa.
+
+```{r, include=FALSE}
+df$day <- factor(df$day , levels=c("Thur", "Fri", "Sat", "Sun"))
+df$time <- factor(df$time , levels=c("Lunch", "Dinner"))
+```
+
+### Variabili qualitative
+
+```{r, include=TRUE, echo=FALSE}
+kbl(table(df$sex), caption = "Frequenza") %>% kable_paper("hover", full_width = F)
+```
+```{r, include=TRUE, echo=FALSE}
+boxplot(df$tip ~ df$sex, xlab="sex", ylab="tip", col=c("#D90000", "#0072B2"), 
+        main="Boxplot\n genere - mancia")
+```
+
+Possiamo vedere dal boxplot che il genere del cliente non cambino molto il valore _mancia_, tuttavia dalla tabella di frquenza si nota che sono gli uomini a dare la mancia la maggior parte delle volte. Potrebbe rivelarsi un dato importante per il modello.
+
+```{r, include=TRUE, echo=FALSE}
+kbl(table(df$smoker), caption = "Frequenza") %>% kable_paper("hover", full_width = F)
+boxplot(df$tip ~ df$smoker, xlab="smoker", ylab="tip", col=c("#DDDDDD", "#999999"), 
+        main="Boxplot\n fumatori - mancia")
+```
+
+Possiamo vedere dal boxplot che il fattore fumo non cambia molto il valore _mancia_, ciò si può concludere osservando la dimensione dei boxplot e dei suoi baffi, ed inoltre la media è pressochè uguale.
+
+```{r, include=TRUE, echo=FALSE}
+kbl(table(df$day), caption = "Frequenza") %>% kable_paper("hover", full_width = F)
+boxplot(df$tip ~ df$day, xlab="day", ylab="tip", col=c("#D90000", "#0072B2", "#00ED00", "#EE22EE"), 
+        main="Boxplot\n giorno - mancia")
+```
+
+Per quanto riguarda il giorno della settimana ci si aspetta effettivamente che durante l'weekend ci siano più persone e quindi più mancie come si puo osservare dalla tabella di frequenza.
+Tuttavia anche in questo caso non si può concludere molto sulll'importanza della variabile per il modello.
+
+```{r, include=TRUE, echo=FALSE}
+kbl(table(df$time), caption = "Frequenza") %>% kable_paper("hover", full_width = F)
+boxplot(df$tip ~ df$time, xlab="time", ylab="tip", col=c("#D90000", "#0072B2"), 
+        main="Boxplot\n ora - mancia")
+```
+
+Il numero di cene è molto più elevato rispetto ai pranzi, ed inoltre in media il valore della mancia è più alto rispetto a quello delle cene, questa variabile verra tenuta in considerazione per la creazione del modello.
+
+## Diagramma di dispersione per vari gruppi
+
+```{r, include=TRUE, echo=FALSE}
+colors <- c("#FDAE61", # Orange
+            "#66BD63") # Darker green
+
+
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione conto toale - mancia",
+     sub="group by df$sex", col = colors[df$sex], xlab="Conto totale", ylab="Mancia",
+     pch = 19)
+
+legend("topleft",
+       legend = levels(df$sex),
+       pch = 19,
+       col = colors)
+```
+
+Anche se la maggior parte delle osseravazioni è prevalentemente di un tipo ciò non implica che il valore della mancia sarà più elevato, infatti i punti rosa e azzurri sono dispersi bene su tutto il grafico.
+
+```{r, include=TRUE, echo=FALSE}
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione conto toale - mancia",
+     sub="group by df$smoker", col = colors[df$smoker], xlab="Conto totale", ylab="Mancia",
+     pch = 19)
+
+legend("topleft",
+       legend = levels(df$smoker),
+       pch = 19,
+       col = colors)
+```
+
+```{r, include=TRUE, echo=FALSE}
+colors2 <- c("#FDAE61",
+            "#66BD63",
+            "#ea8866",
+            "#6688ea")
+
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione conto toale - mancia",
+     sub="group by df$day", col = colors2[df$day], xlab="Conto totale", ylab="Mancia",
+     pch = 19)
+
+legend("topleft",
+       legend = levels(df$day),
+       pch = 19,
+       col = colors2)
+```
+
+```{r, include=TRUE, echo=FALSE}
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione conto toale - mancia",
+     sub="group by df$time", col = colors[df$time], xlab="Conto totale", ylab="Mancia",
+     pch = 19)
+
+legend("topleft",
+       legend = levels(df$time),
+       pch = 19,
+       col = colors)
+```
+
+```{r, include=TRUE, echo=FALSE}
+colors3 <- c("#FDAE61",
+            "#66BD63",
+            "#ea8866",
+            "#6688ea",
+            "#FD61AE",
+            "#000000")
+
+plot(x=log1p(df$total_bill), y=log1p(df$tip), main="Diagramma di dispersione conto toale - mancia",
+     sub="group by df$time", col = colors3[factor(df$size)], xlab="Conto totale", ylab="Mancia",
+     pch = 19)
+
+legend("topleft",
+       legend = levels(factor(df$size)),
+       pch = 19,
+       col = colors3)
+```
+
+Il feedback migliore si ottiene dal boxplot _size-mancia_ dal quale si può vedere chiaramente che all'aumentare di size la mancia cresce, quasi linearmente.
+
+## Creazione del modello
+
+Stimiamo un primo modello con tutte le variabili, si noti che questo si esprime con la formula y~.,
+R costruir`a un modello che include y come risposta e tutte le variabili presenti nel data.frame di
+riferimento come esplicative).
+
+```{r, include=TRUE}
+fitA = lm(tip ~ ., data = df)
+summary(fitA)
+kbl(coef(summary(fitA)), caption = "FitA") %>% kable_paper("hover", full_width = F)
+par(mfrow=c(2,2))
+plot(fitA)
+```
+
+Diversi coefficienti, ma non tutti, risultano significativamente diversi da zero.
+L’analisi dei residui (plot(fitA)) non mostra evidenti incompatibilit`a con le ipotesi del modello.
+(Quest’analisi preliminare serve a valutare l’eventualit`a di trasformare la variabile risposta, cosa che qui non pare necessaria.)
+
+Consideraimo ora alcuni modelli che prendono in considerazione le variabili singolarmente, e vediamo se hanno un effetto signficativo e positivo sul valore della mancia. 
+
+### Modello __total_bill__ ~ __tip__
+
+```{r, include=TRUE}
+fitB = lm(I(log1p(tip)) ~ I(log1p(total_bill)), data = df)
+summary(fitB)
+kbl(coef(summary(fitB)), caption = "FitB") %>% kable_paper("hover", full_width = F)
+par(mfrow=c(2,2))
+plot(fitB)
+```
+
+
+Il modello selezionato risultante ha le seguenti carratteristiche, il coefficiente risulta statisticamente significativo e la percentuale di variabilità spiegata dal modello è del 45.4%. 
+
+### Modello __size__ ~ __tip__
+
+```{r, include=TRUE}
+fitC = lm(I(log1p(tip)) ~ size, data = df)
+summary(fitC)
+kbl(coef(summary(fitC)), caption = "FitC") %>% kable_paper("hover", full_width = F)
+par(mfrow=c(2,2))
+plot(fitC)
+```
+
+Il modello selezionato risultante ha le seguenti carratteristiche, il coefficiente risulta statisticamente significativo e la percentuale di variabilità spiegata dal modello è del 23.5%.
+
+### Modello ( __total_bill__, __size__) ~ __tip__
+
+```{r, include=TRUE}
+fitBC = lm(I(log1p(tip)) ~ I(log1p(total_bill)) + size, data = df)
+summary(fitBC)
+kbl(coef(summary(fitBC)), caption = "FitBC") %>% kable_paper("hover", full_width = F)
+par(mfrow=c(2,2))
+plot(fitBC)
+```
+
+Il modello selezionato risultante ha le seguenti carratteristiche, i coefficienti risultano statisticamente significativi e la percentuale di variabilità spiegata dal modello è del 46,4%.
+
+```{r, include=TRUE, echo=FALSE}
+fitAIC = stepAIC(fitA, direction="both")
+kbl(coef(summary(fitAIC)), caption = "FitAIC") %>% kable_paper("hover", full_width = F)
+```
